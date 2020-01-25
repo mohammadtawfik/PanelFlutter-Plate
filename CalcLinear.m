@@ -1,5 +1,5 @@
-%This function evaluates mass and stiffness
-% matrices [Kb] and [Mb] 
+%This function evaluates linear matrices
+% [Kb]  [Mb]  [Kt] [Ka]
 %It may be used for the finite element 
 % program for plates of C1 continuity
 
@@ -11,53 +11,53 @@
 % published on ResearchGate.Net
 %Author: Mohammad Tawfik
 
-%Title: Fundamentals of Numerical Analysis
-%DOI: 10.13140/RG.2.2.25680.81925
-%Updated text link:
-%https://www.researchgate.net/publication/321850359_Fundamentals_of_Numerical_Analysis_Book_Draft
-
-%Title: Finite Element Analysis
-%DOI: 10.13140/RG.2.2.32391.70560
-%Updated text link:
-%https://www.researchgate.net/publication/321850256_Finite_Element_Analysis_Book_Draft
-
-%Title: Dynamics and Control of Flexible Structures
-%DOI: 10.13140/RG.2.2.29036.26242
-%Updated text link:
-%https://www.researchgate.net/publication/321850001_Dynamics_and_Control_of_Flexible_Structures_Book_Draft
-
 %Title: Panel Flutter
 %DOI: 10.13140/RG.2.1.1537.6807
 %Updated text link:
 %https://www.researchgate.net/publication/275712979_Panel_Flutter
 
-%More code abpout other topics in the text
-% may be downloaded from:
-% https://github.com/mohammadtawfik/FEM-Plates
+%More code and functions related to
+% this problem may be downloaded from:
+% https://github.com/mohammadtawfik/PanelFlutter-Plate
 
-function [KB,MB]=CalcLinear(Q,Lx,Ly)
+function [KB,MB,KT,KA]=CalcLinear(D,Lx,Ly)
 
-GCn=9;
+GCn=8; %Number of Gauss integration points
+%Get the Gauss constants
 GaussConstants=GetGC(GCn);
+%Initialize the matrices
 KB=zeros(16,16);
 MB=zeros(16,16);
+KT=zeros(16,16);
+KA=zeros(16,16);
 
 %Start the numerical integrration procedure
 for Xi=1:GCn
+  %Evaluating the physiscal value of X
   X = Lx * (GaussConstants(2, Xi) + 1) / 2;
   for Yi=1:GCn
+    %Evaluating the physical value of Y
     Y= Ly * (GaussConstants(2,Yi) + 1) / 2;
-    Hw=CalcHw(X,Y);
-    Cb=CalcCb(X,Y);
-    Kb= cb'*Q*cb;
+    Hw =CalcHw(X,Y);
+    Hwx=CalcHwx(X,Y);
+    Cb =CalcCb(X,Y);
+    Ct =CalcCt(X,Y);
+    
+    Kb= Cb'*D*Cb;
     Mb= Hw'*Hw;
+    Kt= Ct'*Ct;
+    Ka= Hw'*Hwx;
     %performing the weighted summation
     KB=KB+GaussConstants(1,Xi)*GaussConstants(1,Yi)*Kb;
     MB=MB+GaussConstants(1,Xi)*GaussConstants(1,Yi)*Mb;
+    KT=KT+GaussConstants(1,Xi)*GaussConstants(1,Yi)*Kt;
+    KA=KA+GaussConstants(1,Xi)*GaussConstants(1,Yi)*Ka;
     %End of Calculation loop body
   endfor
 endfor 
-%Multiplying the resulting matreces by Jacobian
+%Multiplying the resulting matrices by Jacobian
 KB = KB * Lx * Ly / 4;
 MB = MB * Lx * Ly / 4;
+KT = KT * Lx * Ly / 4;
+KA = KA * Lx * Ly / 4;
 endfunction

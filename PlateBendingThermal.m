@@ -9,37 +9,14 @@
 % published on ResearchGate.Net
 %Author: Mohammad Tawfik
 
-%Title: Fundamentals of Numerical Analysis
-%DOI: 10.13140/RG.2.2.25680.81925
-%Updated text link:
-%https://www.researchgate.net/publication/321850359_Fundamentals_of_Numerical_Analysis_Book_Draft
-
-%Title: Finite Element Analysis
-%DOI: 10.13140/RG.2.2.32391.70560
-%Updated text link:
-%https://www.researchgate.net/publication/321850256_Finite_Element_Analysis_Book_Draft
-
-%Title: Dynamics and Control of Flexible Structures
-%DOI: 10.13140/RG.2.2.29036.26242
-%Updated text link:
-%https://www.researchgate.net/publication/321850001_Dynamics_and_Control_of_Flexible_Structures_Book_Draft
-
 %Title: Panel Flutter
 %DOI: 10.13140/RG.2.1.1537.6807
 %Updated text link:
 %https://www.researchgate.net/publication/275712979_Panel_Flutter
 
-%More code about other topics in the text
-% may be downloaded from:
-% https://github.com/mohammadtawfik/FEM-Plates
-
-%Explanation for how this code works is 
-% available in the text
-%Title: Dynamics and Control of Flexible Structures
-%DOI: 10.13140/RG.2.2.29036.26242
-%Updated text link:
-%https://www.researchgate.net/publication/321850001_Dynamics_and_Control_of_Flexible_Structures_Book_Draft
-
+%More code and functions related to
+% this problem may be downloaded from:
+% https://github.com/mohammadtawfik/PanelFlutter-Plate
 
 %Clearing the memory
 clear all
@@ -57,8 +34,12 @@ LengthX  = 1;         % m
 LengthY  = 1;         % m
 Thickness= 0.001;     % m
 %Finite Element Problem Data
-Nx = 10; %number of elements in the x-direction
-Ny = 10; %number of elements in the x-direction
+Nx = 5; %number of elements in the x-direction
+Ny = 5; %number of elements in the x-direction
+%Support conditions are user-defined
+% 0=CCCC
+% 1=SSSS
+SupportConditions=1;
 
 %Evaluating the basic quantities
 Lx=LengthX/Nx; %element dimensions
@@ -67,13 +48,16 @@ Qq=Modulus/(1-Nu*Nu)* ...
     [1,Nu,0;Nu,1,0;0,0,(1-Nu)/2];
 Dd=Qq*Thickness*Thickness*Thickness/12;
 Nt=Modulus*Thickness*Alpha/(1-Nu);
+Wo=sqrt(Dd(1,1)/Rho/Thickness/LengthX/LengthX/LengthX/LengthX);
 TbInv=CalcTbInv(Lx,Ly);
 
-[Kb,Mb]=CalcLinear(Dd,Lx,Ly);
+[Kb,Mb,Kt,Ka]=CalcLinear(Dd,Lx,Ly);
 Kb=TbInv'*Kb*TbInv;
-Mb=TbInv'*Mb*TbInv*Rho*Thickness;
-Kt=CalcThermal(Lx,Ly);
+Ga=TbInv'*Mb*TbInv;
+Mb=Ga*Rho*Thickness;
+Ga =Dd(1,1)/Wo/(LengthX^4)*Ga; 
 Kt=Nt*TbInv'*Kt*TbInv;
+Ka=Dd(1,1)*TbInv'*Ka*TbInv/LengthX/LengthX/LengthX;
 %***************************************
 %Creating the Mesh (Noedes and Elements)
 %***************************************
@@ -116,10 +100,6 @@ endfor
 %  ie. the columns and rows that will be
 %  eleminated from the global matrix
 BCs=[];
-%Support conditions are user-defined
-% 0=CCCC
-% 1=SSSS
-SupportConditions=1;
 for jj=1:Ny+1
   for ii=1:Nx+1
     Pointer=(jj-1)*(Nx+1) + ii; %Node number
@@ -161,6 +141,8 @@ BCsC(BCs)=[];
 KG=zeros(4*(Nx+1)*(Ny+1),4*(Nx+1)*(Ny+1));
 MG=zeros(4*(Nx+1)*(Ny+1),4*(Nx+1)*(Ny+1));
 KT=zeros(4*(Nx+1)*(Ny+1),4*(Nx+1)*(Ny+1));
+KA=zeros(4*(Nx+1)*(Ny+1),4*(Nx+1)*(Ny+1));
+GA=zeros(4*(Nx+1)*(Ny+1),4*(Nx+1)*(Ny+1));
 
 %Looping for the elements
 for ii=1:Nx*Ny
@@ -176,38 +158,66 @@ for ii=1:Nx*Ny
         Kt(4*jj-3:4*jj,4*kk-3:4*kk);
       MG(DOFsj,DOFsk)=MG(DOFsj,DOFsk)+ ...
         Mb(4*jj-3:4*jj,4*kk-3:4*kk);
+      GA(DOFsj,DOFsk)=GA(DOFsj,DOFsk)+ ...
+        Ga(4*jj-3:4*jj,4*kk-3:4*kk);
+      KA(DOFsj,DOFsk)=KA(DOFsj,DOFsk)+ ...
+        Ka(4*jj-3:4*jj,4*kk-3:4*kk);
     endfor
   endfor
 endfor
 %Applying the boundary conditions
 KReduced=KG(BCsC,BCsC);
-KtReduced=KT(BCsC,BCsC);
+TReduced=KT(BCsC,BCsC);
 MReduced=MG(BCsC,BCsC);
-
-%Evaluating the Natural Frequencies of the
-% plate without the presence of themal
-% load
-vvv=sqrt(sort(eig(inv(MReduced)*KReduced)));
-%Displaying the lowest 5 frequencies 
-% normalized to be able to compare to
-% literature
-vvv(1:5)*sqrt(Rho*Thickness/Dd(1,1)) %rad/sec
-
-%Evaluating the buckling teperature
-ttt=sort(eig(inv(KtReduced)*KReduced));
-%Displaying the lowest buckling temperatures
-% normalized to compare with literature
-ttt(1:5)*12*(1+Nu)*Alpha/pi/pi/Thickness/Thickness
+GReduced=GA(BCsC,BCsC);
+AReduced=KA(BCsC,BCsC);
 
 
-%Showing the effect of thermal loads on 
-% the lowest natural frequency of the plate
-DeltaT=ttt(1)/20;
-for ii=1:21
-  TTT(ii)=DeltaT*(ii-1);
-  vv(ii)=min(sqrt(sort(eig(inv(MReduced)*(KReduced-TTT(ii)*KtReduced)))));
+%Evaluating the buckling temperature
+% at different air-flow speeds (dynamic pressure)
+DLamda=11;
+for ii=0:20
+  Lamda=ii*DLamda;
+  LamdaVect(ii+1)=Lamda;
+  BuckTemp(ii+1)= ...
+    min(eig(inv(TReduced)*(KReduced+Lamda*AReduced))) ...
+    *12*(1+Nu)*Alpha/pi/pi/Thickness/Thickness;
 endfor
-plot(TTT*12*(1+Nu)*Alpha/pi/pi/Thickness/Thickness,vv*sqrt(Rho*Thickness/Dd(1,1)))
+%******************************
+%Evaluating the flutter speed
+% by searching for it at different temperatures
+%******************************
+%Evaluating the buckling temperature
+ttt=min(eig(inv(TReduced)*KReduced));
+DeltaT=ttt/10; %Temperature increment
+JInitial=300;
+%Looping for temperatures
+for ii=0:9
+  Ttt=ii*DeltaT*2; %Current Temperature
+  TVect(ii+1)=Ttt*12*(1+Nu)*Alpha/pi/pi/Thickness/Thickness;
+  %Looping for Dynamic pressure
+  for jj=JInitial:1000
+    Lamda=jj;
+    %Total Stiffness Matrix
+    KTotal=KReduced-Ttt*TReduced+Lamda*AReduced;
+    %Eigenvalues
+    Kappa=eig(inv(MReduced)*KTotal);
+    %Checking if flutter ocured
+    %Due to numerical inacurecies, the imaginary
+    % values may be in the order of 10^-5
+    % that is why we set the threshold at 0.001
+    % instead of zero
+    if max(imag(Kappa))>0.001
+      JInitial=Lamda-100; %resetting the initial pressure
+      %Storing the flutter pressure
+      LamdaFlutter(ii+1)=Lamda;
+      break
+    endif
+  endfor
+endfor
+
+figure(2)
+plot(BuckTemp,LamdaVect,TVect,LamdaFlutter)
 grid
-xlabel("Normalized Temperature")
-ylabel("Normalized First Natural Frequency")
+xlabel("Normalized Temp")
+ylabel("Nondimensional Dynamic Pressure")
